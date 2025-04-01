@@ -1,9 +1,9 @@
-version: "3.7"
-
 services:
   caddy:
     container_name: caddy
     image: docker.io/library/caddy:2-alpine
+#    networks:
+#      - searxng
     network_mode: host
     restart: unless-stopped
     volumes:
@@ -50,8 +50,8 @@ services:
     restart: unless-stopped
     networks:
       - searxng
-    ports:
-      - "127.0.0.1:8080:8080"
+#    ports:
+#      - 8000:8080/tcp
     volumes:
       - ./searxng:/etc/searxng:rw
     environment:
@@ -70,6 +70,48 @@ services:
         max-size: "1m"
         max-file: "1"
 
+  open-webui:
+    container_name: open-webui
+    image: ghcr.io/open-webui/open-webui:main
+    networks:
+      - searxng
+    ports:
+      - 8080:8080/tcp
+    environment:
+      - OLLAMA_BASE_URL=http://ollama:11434
+      - WEBUI_AUTH=False
+      - ENABLE_RAG_WEB_SEARCH=True
+      - RAG_WEB_SEARCH_ENGINE=searxng
+      - RAG_WEB_SEARCH_RESULT_COUNT=3
+      - RAG_WEB_SEARCH_CONCURRENT_REQUESTS=10
+      - SEARXNG_QUERY_URL=http://searxng:8080/search?q=<query>
+    volumes:
+      - open-webui-data:/app/backend/data
+      - /etc/timezone:/etc/timezone:ro
+      - /etc/localtime:/etc/localtime:ro
+    depends_on:
+      - ollama
+
+  ollama:
+    container_name: ollama
+    image: ollama/ollama:rocm
+    networks:
+      - searxng
+    ports:
+      - 11434:11434/tcp
+    environment:
+      - HSA_OVERRIDE_GFX_VERSION=10.3.0
+      - HIP_VISIBLE_DEVICES=0
+      - OLLAMA_HOST=0.0.0.0:11434
+    volumes:
+      - ollama-data:/root/.ollama
+      - /etc/timezone:/etc/timezone:ro
+      - /etc/localtime:/etc/localtime:ro
+    devices:
+      - /dev/kfd
+      - /dev/dri
+
+
 networks:
   searxng:
 
@@ -77,3 +119,5 @@ volumes:
   caddy-data:
   caddy-config:
   valkey-data2:
+  open-webui-data:
+  ollama-data:
